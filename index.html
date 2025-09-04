@@ -41,34 +41,14 @@
             appId: "1:1002898401701:web:7461503d7c7bb9f8fb604c",
             measurementId: "G-KQBS4BY8VX"
         };
-		// For Firebase JS SDK v7.20.0 and later, measurementId is optional
         const appId = firebaseConfig.appId;
+
+        // --- HARDCODED CREDENTIALS ---
+        // IMPORTANT: CHANGE THIS VALUE IMMEDIATELY!
+        const VALID_PASSWORD = "P@ssw0rd!23";
 
         // --- Firebase Initialization ---
         let db, auth;
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Check if placeholder values have been replaced
-            if (firebaseConfig.apiKey.includes('YOUR_')) {
-                showMessage("Error: Please update the Firebase configuration in the code.", true);
-                document.getElementById('loading-spinner').classList.add('hidden');
-                document.getElementById('app-content').classList.remove('hidden');
-                return;
-            }
-
-            try {
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-                await signInAnonymously(auth);
-                console.log("Firebase initialized and signed in anonymously.");
-                document.getElementById('loading-spinner').classList.add('hidden');
-                document.getElementById('app-content').classList.remove('hidden');
-            } catch (error) {
-                console.error("Firebase initialization failed:", error);
-                showMessage(`Firebase initialization failed: ${error.message}. Please check your configuration.`, true);
-            }
-        });
-
         const messageBox = document.getElementById('messageBox');
         function showMessage(message, isError = false) {
             messageBox.textContent = message;
@@ -78,7 +58,57 @@
             messageBox.style.display = 'block';
         }
 
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check if placeholder values have been replaced
+            if (firebaseConfig.apiKey.includes('YOUR_')) {
+                showMessage("Error: Please update the Firebase configuration in the code.", true);
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('login-section').classList.remove('hidden');
+                return;
+            }
+            
+            // Initial state: hide app content, show loading spinner
+            document.getElementById('login-section').classList.add('hidden');
+            document.getElementById('app-content').classList.add('hidden');
+            document.getElementById('loading-spinner').classList.remove('hidden');
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                await signInAnonymously(auth);
+                console.log("Firebase initialized and signed in anonymously.");
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showMessage(`Firebase initialization failed: ${error.message}. Please check your configuration.`, true);
+            } finally {
+                // Hide loading spinner and show login form
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('login-section').classList.remove('hidden');
+            }
+        });
+
+        // --- Login Logic ---
+        document.getElementById('loginBtn').addEventListener('click', () => {
+            const passwordInput = document.getElementById('password').value;
+            
+            if (passwordInput === VALID_PASSWORD) {
+                document.getElementById('login-section').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                messageBox.style.display = 'none'; // Hide any previous error messages
+            } else {
+                showMessage("Invalid password.", true);
+            }
+        });
+
+        // --- QR Generator Logic ---
         document.getElementById('generateBtn').addEventListener('click', async () => {
+            // Check if the QR code library is loaded before attempting to use it
+            if (typeof QRCode === 'undefined') {
+                showMessage("QR code library not loaded. Please try refreshing the page.", true);
+                return;
+            }
+
             const guestName = document.getElementById('guestName').value.trim();
             const tableNumber = document.getElementById('tableNumber').value.trim();
             const groupSize = document.getElementById('groupSize').value.trim();
@@ -91,14 +121,14 @@
                 return;
             }
 
-            const guestId = crypto.randomUUID();
-            const qrCodeData = JSON.stringify({ id: guestId });
+            const guest_id = crypto.randomUUID();
+            const qrCodeData = JSON.stringify({ id: guest_id });
             
             try {
                 // Save guest data to Firestore in the public collection
-                const guestDocRef = doc(db, `artifacts/${appId}/public/data/guests`, guestId);
+                const guestDocRef = doc(db, `artifacts/${appId}/public/data/guests`, guest_id);
                 await setDoc(guestDocRef, {
-                    guestId: guestName,
+                    guest_id: guestName,
                     table_number: parseInt(tableNumber, 10),
                     group_size: parseInt(groupSize, 10)
                 });
@@ -130,6 +160,20 @@
         <p class="text-gray-500">Initializing app...</p>
     </div>
 
+    <!-- Login Section -->
+    <div id="login-section" class="hidden container mx-auto p-8 space-y-8 section-box">
+        <h1 class="text-3xl font-bold text-center text-gray-800">Wedding QR Generator</h1>
+        <p class="text-gray-600 text-center">Please enter the password to generate QR codes.</p>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-gray-700">Password:</label>
+                <input type="password" id="password" class="w-full input-field" placeholder="Password">
+            </div>
+            <button id="loginBtn" class="w-full button-primary">Log In</button>
+        </div>
+        <div id="messageBox" style="display:none;" class="text-center"></div>
+    </div>
+
     <!-- Main App Content -->
     <div id="app-content" class="hidden container mx-auto p-8 space-y-8 section-box">
         <h1 class="text-3xl font-bold text-center text-gray-800">Wedding QR Generator</h1>
@@ -150,8 +194,6 @@
             <button id="generateBtn" class="w-full button-primary">Generate QR Code & Save</button>
         </div>
         
-        <div id="messageBox" style="display:none;" class="text-center"></div>
-
         <div id="qrcode-section" class="flex flex-col items-center space-y-4 mt-8">
             <h2 class="text-xl font-semibold text-gray-800">Generated QR Code</h2>
             <canvas id="qrcode" class="border-2 border-gray-300 rounded-lg p-2"></canvas>
