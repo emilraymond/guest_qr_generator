@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f0f4f8; }
+        .container { max-width: 600px; }
+        .section-box { background-color: #ffffff; border-radius: 1rem; box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1); }
+        .input-field { border: 1px solid #cbd5e1; padding: 0.75rem 1rem; border-radius: 0.5rem; }
+        .button-primary { background-color: #3b82f6; color: white; padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; }
+        .button-primary:hover { background-color: #2563eb; }
+        .loading-spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-left: 4px solid #3b82f6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: Replace the placeholder values below with your actual Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyA_feMG7fruy8JP8SavztqMEq0_hhwygVI",
+            authDomain: "wedding-guest-app-76d77.firebaseapp.com",
+            projectId: "wedding-guest-app-76d77",
+            storageBucket: "wedding-guest-app-76d77.firebasestorage.app",
+            messagingSenderId: "1002898401701",
+            appId: "1:1002898401701:web:7461503d7c7bb9f8fb604c",
+            measurementId: "G-KQBS4BY8VX"
+        };
+		// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        const appId = firebaseConfig.appId;
+
+        // --- Firebase Initialization ---
+        let db, auth;
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check if placeholder values have been replaced
+            if (firebaseConfig.apiKey.includes('YOUR_')) {
+                showMessage("Error: Please update the Firebase configuration in the code.", true);
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                await signInAnonymously(auth);
+                console.log("Firebase initialized and signed in anonymously.");
+                document.getElementById('loading-spinner').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                showMessage(`Firebase initialization failed: ${error.message}. Please check your configuration.`, true);
+            }
+        });
+
+        const messageBox = document.getElementById('messageBox');
+        function showMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.className = isError 
+                ? 'mt-4 p-4 rounded-lg bg-red-100 text-red-700' 
+                : 'mt-4 p-4 rounded-lg bg-green-100 text-green-700';
+            messageBox.style.display = 'block';
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', async () => {
+            const guestName = document.getElementById('guestName').value.trim();
+            const tableNumber = document.getElementById('tableNumber').value.trim();
+            const groupSize = document.getElementById('groupSize').value.trim();
+            const qrCodeContainer = document.getElementById('qrcode');
+            qrCodeContainer.innerHTML = '';
+            messageBox.style.display = 'none';
+
+            if (!guestName || !tableNumber || !groupSize) {
+                showMessage("Please fill out all fields.", true);
+                return;
+            }
+
+            const guestId = crypto.randomUUID();
+            const qrCodeData = JSON.stringify({ id: guestId });
+            
+            try {
+                // Save guest data to Firestore in the public collection
+                const guestDocRef = doc(db, `artifacts/${appId}/public/data/guests`, guestId);
+                await setDoc(guestDocRef, {
+                    guestId: guestName,
+                    table_number: parseInt(tableNumber, 10),
+                    group_size: parseInt(groupSize, 10)
+                });
+
+                // Generate and display QR code
+                QRCode.toCanvas(qrCodeContainer, qrCodeData, {
+                    errorCorrectionLevel: 'H',
+                    width: 256,
+                    margin: 2
+                }, (error) => {
+                    if (error) {
+                        console.error(error);
+                        showMessage("Failed to generate QR code.", true);
+                    } else {
+                        showMessage("QR Code generated and guest data saved!", false);
+                    }
+                });
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                showMessage("An error occurred while saving to the database. Check the console for more details.", true);
+            }
+        });
+    </script>
+</head>
+<body class="bg-gray-50 flex items-center justify-center min-h-screen p-4">
+    <!-- Loading Spinner -->
+    <div id="loading-spinner" class="flex flex-col items-center justify-center space-y-4 text-center">
+        <div class="loading-spinner"></div>
+        <p class="text-gray-500">Initializing app...</p>
+    </div>
+
+    <!-- Main App Content -->
+    <div id="app-content" class="hidden container mx-auto p-8 space-y-8 section-box">
+        <h1 class="text-3xl font-bold text-center text-gray-800">Wedding QR Generator</h1>
+        <p class="text-gray-600 text-center">Fill out the guest details to generate a QR code and save their information to the database.</p>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-gray-700">Guest Name:</label>
+                <input type="text" id="guestName" class="w-full input-field" placeholder="e.g., John Doe">
+            </div>
+            <div>
+                <label class="block text-gray-700">Table Number:</label>
+                <input type="number" id="tableNumber" class="w-full input-field" placeholder="e.g., 5">
+            </div>
+            <div>
+                <label class="block text-gray-700">Group Size:</label>
+                <input type="number" id="groupSize" class="w-full input-field" placeholder="e.g., 2">
+            </div>
+            <button id="generateBtn" class="w-full button-primary">Generate QR Code & Save</button>
+        </div>
+        
+        <div id="messageBox" style="display:none;" class="text-center"></div>
+
+        <div id="qrcode-section" class="flex flex-col items-center space-y-4 mt-8">
+            <h2 class="text-xl font-semibold text-gray-800">Generated QR Code</h2>
+            <canvas id="qrcode" class="border-2 border-gray-300 rounded-lg p-2"></canvas>
+            <p class="text-sm text-gray-500">Print this QR code and give it to your guest.</p>
+        </div>
+    </div>
+</body>
+</html>
