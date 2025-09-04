@@ -125,30 +125,51 @@
             const qrCodeData = JSON.stringify({ id: guest_id });
             
             try {
-                // Save guest data to Firestore in the public collection
+                // Generate the QR code first to get its image data
+                const canvas = await new Promise((resolve, reject) => {
+                    QRCode.toCanvas(qrCodeContainer, qrCodeData, {
+                        errorCorrectionLevel: 'H',
+                        width: 256,
+                        margin: 2
+                    }, (error, canvas) => {
+                        if (error) {
+                            reject(error);
+                        } else {
+                            resolve(canvas);
+                        }
+                    });
+                });
+
+                // Get the Base64 image data from the canvas
+                const qrImageData = canvas.toDataURL('image/png');
+
+                // Save guest data and the QR image data to Firestore
                 const guestDocRef = doc(db, `artifacts/${appId}/public/data/guests`, guest_id);
                 await setDoc(guestDocRef, {
                     guest_id: guestName,
                     table_number: parseInt(tableNumber, 10),
-                    group_size: parseInt(groupSize, 10)
+                    group_size: parseInt(groupSize, 10),
+                    qr_image_data: qrImageData // Save the image data
                 });
 
-                // Generate and display QR code
-                QRCode.toCanvas(qrCodeContainer, qrCodeData, {
-                    errorCorrectionLevel: 'H',
-                    width: 256,
-                    margin: 2
-                }, (error) => {
-                    if (error) {
-                        console.error(error);
-                        showMessage("Failed to generate QR code.", true);
-                    } else {
-                        showMessage("QR Code generated and guest data saved!", false);
-                    }
-                });
+                showMessage("QR Code generated and guest data saved!", false);
+
+                // Make the download buttons visible and functional
+                const qrImageActions = document.getElementById('qrcode-actions');
+                qrImageActions.classList.remove('hidden');
+                document.getElementById('downloadBtn').onclick = () => {
+                    const link = document.createElement('a');
+                    link.download = `${guestName}-qr-code.png`;
+                    link.href = qrImageData;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                    showMessage("QR code image downloaded!", false);
+                };
+
             } catch (e) {
-                console.error("Error adding document: ", e);
-                showMessage("An error occurred while saving to the database. Check the console for more details.", true);
+                console.error("Error adding document or generating QR code: ", e);
+                showMessage("An error occurred. Check the console for more details.", true);
             }
         });
     </script>
@@ -197,7 +218,10 @@
         <div id="qrcode-section" class="flex flex-col items-center space-y-4 mt-8">
             <h2 class="text-xl font-semibold text-gray-800">Generated QR Code</h2>
             <canvas id="qrcode" class="border-2 border-gray-300 rounded-lg p-2"></canvas>
-            <p class="text-sm text-gray-500">Print this QR code and give it to your guest.</p>
+            <div id="qrcode-actions" class="hidden flex space-x-4 mt-4">
+                <button id="downloadBtn" class="bg-gray-200 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-300">Download Image</button>
+            </div>
+            <p class="text-sm text-gray-500">The QR code is also saved in the database for later retrieval.</p>
         </div>
     </div>
 </body>
